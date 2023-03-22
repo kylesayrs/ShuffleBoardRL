@@ -34,22 +34,3 @@ def puck_in_area(
             position_offset <= area_top_right,
         )
     )
-
-
-if __name__ == "__main__":
-    state = torch.tensor([
-        [0.5, 0.5],
-        [-0.5, -0.5],
-        [0.5, -0.5],
-        [-0.5, 0.5],
-        [1.5, 0.5],
-        [0.5, 1.5],
-        [1.5, 1.5],
-    ])
-
-    area = torch.tensor([
-        [0.0, 0.0],
-        [1.0, 1.0]
-    ])
-
-    print(get_num_pucks_in_area(state, *area))

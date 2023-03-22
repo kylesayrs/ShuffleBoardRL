@@ -4,38 +4,38 @@ import torch
 import matplotlib.pyplot as plt
 from matplotlib import animation
 
-from config import EnvironmentConfig
+from config import Config
 from utils import get_num_pucks_in_area, puck_in_area
 
 
 OFF_BOARD = torch.tensor([-1000.0, -1000.0])
 
 class Environment:
-    def __init__(self, environment_config: EnvironmentConfig) -> None:
-        self.config = environment_config
+    def __init__(self, config: Config) -> None:
+        self.e_config = config.environment
 
         self.one_area, self.two_area, self.three_area, self.board_area = self._get_score_areas()
 
-        self.puck_positions = OFF_BOARD.repeat(int(2 * self.config.num_turns)).reshape(int(2 * self.config.num_turns), 2)
+        self.puck_positions = OFF_BOARD.repeat(int(2 * self.e_config.num_turns)).reshape(int(2 * self.e_config.num_turns), 2)
         self.puck_velocities = torch.zeros(self.puck_positions.shape)
-        self.turns_state = torch.tensor([self.config.num_turns, self.config.num_turns], dtype=torch.int8)
+        self.turns_state = torch.tensor([self.e_config.num_turns, self.e_config.num_turns], dtype=torch.int8)
         self.current_turn = 0
 
 
     def _get_score_areas(self):
         one_area = torch.tensor([
             [0.0, 0.0],
-            [self.config.board_width, self.config.one_height]
+            [self.e_config.board_width, self.e_config.one_height]
         ])
 
         two_area = torch.tensor([
             [0.0, one_area[1][1]],
-            [self.config.board_width, one_area[1][1] + self.config.two_height]
+            [self.e_config.board_width, one_area[1][1] + self.e_config.two_height]
         ])
 
         three_area = torch.tensor([
             [0.0, two_area[1][1]],
-            [self.config.board_width, two_area[1][1] + self.config.three_height]
+            [self.e_config.board_width, two_area[1][1] + self.e_config.three_height]
         ])
 
         board_area = torch.vstack([
@@ -70,13 +70,13 @@ class Environment:
         magnitude: torch.tensor
     ):
         # preprocess actions
-        x_position = torch.clip(x_position, 0.0, self.config.board_width)
+        x_position = torch.clip(x_position, 0.0, self.e_config.board_width)
         angle = torch.clip(angle, 0.0, torch.pi)
-        magnitude = torch.clip(magnitude, 0.0, self.config.max_agent_magnitude)
+        magnitude = torch.clip(magnitude, 0.0, self.e_config.max_agent_magnitude)
 
         # used for indexing the new puck
         turns_left = self.turns_state[self.current_turn]
-        new_puck_index = int(self.current_turn * self.config.num_turns + turns_left - 1)
+        new_puck_index = int(self.current_turn * self.e_config.num_turns + turns_left - 1)
 
         # positions
         new_puck_position = torch.tensor([x_position, 0.0])
@@ -88,9 +88,9 @@ class Environment:
         self.puck_velocities[new_puck_index] = new_puck_velocity
 
         # factor by simulation_h
-        simulation_fiction_coef = self.config.friction_coef ** self.config.simulation_h
-        min_simulation_velocity = self.config.min_velocity * self.config.simulation_h
-        max_simulation_steps = int(self.config.max_time_steps / self.config.simulation_h)
+        simulation_fiction_coef = self.e_config.friction_coef ** self.e_config.simulation_h
+        min_simulation_velocity = self.e_config.min_velocity * self.e_config.simulation_h
+        max_simulation_steps = int(self.e_config.max_time_steps / self.e_config.simulation_h)
 
         # prepare history
         position_history = []
@@ -100,8 +100,7 @@ class Environment:
 
          # simulate
         for simulation_step_i in range(max_simulation_steps):
-            print(f"simulation_step_i: {simulation_step_i}")
-            self.puck_positions += self.puck_velocities * self.config.simulation_h
+            self.puck_positions += self.puck_velocities * self.e_config.simulation_h
             self.puck_velocities *= simulation_fiction_coef
 
             # check for collision
@@ -110,7 +109,7 @@ class Environment:
                     puck_b_index = puck_a_index + a_index_offset + 1
                     if all(puck_a_position == OFF_BOARD) or all(puck_b_position == OFF_BOARD): continue
 
-                    intersection_radius = self.config.puck_radius * 2 - torch.norm(puck_a_position - puck_b_position)
+                    intersection_radius = self.e_config.puck_radius * 2 - torch.norm(puck_a_position - puck_b_position)
                     if intersection_radius > 0:
                         # https://en.wikipedia.org/wiki/Elastic_collision
                         total_velocity = self.puck_velocities[puck_a_index] + self.puck_velocities[puck_b_index]
@@ -159,7 +158,7 @@ class Environment:
     def _show_animation(self, position_history, velocity_history, num_frames):
         figure, axes = plt.subplots()
         plt.axis("equal")
-        plt.xlim([0.0, self.config.board_width])
+        plt.xlim([0.0, self.e_config.board_width])
         plt.ylim([0.0, self.three_area[1][1]])
 
         area_patches = []
@@ -179,7 +178,7 @@ class Environment:
             init_func=lambda: self._animation_init(*animation_args),
             frames=num_frames,
             fargs=animation_args,
-            interval=100,
+            interval=100 * self.e_config.simulation_h,
             blit=True
         )
         plt.show()
@@ -208,7 +207,7 @@ class Environment:
         ]
 
         for puck_position, puck_velocity in zip(position_history[-1], velocity_history[-1]):
-            puck_patches.append(plt.Circle(puck_position.clone(), self.config.puck_radius, visible=False))
+            puck_patches.append(plt.Circle(puck_position.clone(), self.e_config.puck_radius, visible=False))
             arrow_patches.append(plt.Arrow(*puck_position.clone(), *puck_velocity.clone(), color="black", visible=False))
     
         [axes.add_patch(patch) for patch in (area_patches + puck_patches + arrow_patches)]
@@ -236,8 +235,8 @@ class Environment:
 
 
 if __name__ == "__main__":
-    environment_config = EnvironmentConfig()
-    environment = Environment(environment_config=environment_config)
+    config = Config()
+    environment = Environment(config)
     environment.perform_action(
         x_position=torch.tensor(5.0),
         angle=torch.tensor(torch.pi / 2),
