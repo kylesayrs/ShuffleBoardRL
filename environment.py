@@ -106,7 +106,8 @@ class Environment:
                     puck_b_index = puck_a_index + a_index_offset + 1
                     if all(puck_a_position == OFF_BOARD) or all(puck_b_position == OFF_BOARD): continue
 
-                    if torch.norm(puck_a_position - puck_b_position) < self.config.puck_radius * 2:
+                    intersection_radius = self.config.puck_radius * 2 - torch.norm(puck_a_position - puck_b_position)
+                    if intersection_radius > 0:
                         # https://en.wikipedia.org/wiki/Elastic_collision
                         total_velocity = self.puck_velocities[puck_a_index] + self.puck_velocities[puck_b_index]
 
@@ -125,7 +126,12 @@ class Environment:
                             self.puck_velocities[puck_a_index] = normal_velocity
 
                         # unintersect
-                        
+                        delta_a = (normal_unit_vector) * intersection_radius / 2
+                        delta_b = (-1 * normal_unit_vector) * intersection_radius / 2
+
+                        self.puck_positions[puck_a_index] += delta_a
+                        self.puck_positions[puck_b_index] += delta_b
+
                     
             # check for out-of-bounds
             for puck_index, puck_position in enumerate(self.puck_positions):
