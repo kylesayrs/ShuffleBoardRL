@@ -2,7 +2,7 @@ from typing import Tuple
 
 import torch
 import matplotlib.pyplot as plt
-from matplotlib.collections import PatchCollection
+from matplotlib import animation
 
 from config import EnvironmentConfig
 from utils import get_num_pucks_in_area, puck_in_area
@@ -92,13 +92,17 @@ class Environment:
         min_simulation_velocity = self.config.min_velocity * self.config.simulation_h
         max_simulation_steps = int(self.config.max_time_steps / self.config.simulation_h)
 
-        # simulate
-        self.plot()
+        # prepare history
+        position_history = []
+        velocity_history = []
+        position_history.append(self.puck_positions.clone())
+        velocity_history.append(self.puck_velocities.clone())
+
+         # simulate
         for simulation_step_i in range(max_simulation_steps):
             print(f"simulation_step_i: {simulation_step_i}")
             self.puck_positions += self.puck_velocities * self.config.simulation_h
             self.puck_velocities *= simulation_fiction_coef
-            self.plot()
 
             # check for collision
             for puck_a_index, puck_a_position in enumerate(self.puck_positions):
@@ -143,14 +147,46 @@ class Environment:
             if torch.all(torch.abs(self.puck_velocities) < min_simulation_velocity):
                 break
 
+            position_history.append(self.puck_positions.clone())
+            velocity_history.append(self.puck_velocities.clone())
+
+        self._show_animation(position_history, velocity_history, simulation_step_i)
+
         # end turn
         self._end_turn()
 
-        
-    def plot(self) -> str:
-        # plot areas
+
+    def _show_animation(self, position_history, velocity_history, num_frames):
         figure, axes = plt.subplots()
-        area_rectangles = [
+        plt.axis("equal")
+        plt.xlim([0.0, self.config.board_width])
+        plt.ylim([0.0, self.three_area[1][1]])
+
+        area_patches = []
+        puck_patches = []
+        arrow_patches = []
+        animation_args = [
+            position_history,
+            velocity_history,
+            axes,
+            area_patches,
+            puck_patches,
+            arrow_patches,
+        ]
+        anim = animation.FuncAnimation(
+            figure,
+            self._animate,
+            init_func=lambda: self._animation_init(*animation_args),
+            frames=num_frames,
+            fargs=animation_args,
+            interval=100,
+            blit=True
+        )
+        plt.show()
+
+
+    def _animation_init(self, position_history, velocity_history, axes, area_patches, puck_patches, arrow_patches):
+        area_patches += [
             plt.Rectangle(
                 self.one_area[0], *(self.one_area[1] - self.one_area[0]),
                 edgecolor="black",
@@ -170,26 +206,28 @@ class Environment:
                 fill=True
             ),
         ]
-        
-        [axes.add_patch(patch) for patch in area_rectangles]
 
-        # plot pucks
-        puck_patches = []
-        for puck_position, puck_velocity in zip(
-            self.puck_positions, self.puck_velocities
-        ):
-            if all(puck_position == OFF_BOARD): continue
+        for puck_position, puck_velocity in zip(position_history[-1], velocity_history[-1]):
+            puck_patches.append(plt.Circle(puck_position.clone(), self.config.puck_radius, visible=False))
+            arrow_patches.append(plt.Arrow(*puck_position.clone(), *puck_velocity.clone(), color="black", visible=False))
+    
+        [axes.add_patch(patch) for patch in (area_patches + puck_patches + arrow_patches)]
 
-            puck_patches.append(plt.Circle(puck_position, self.config.puck_radius))
-            if any(puck_velocity):
-                puck_patches.append(plt.Arrow(*puck_position, *puck_velocity, color="black"))
+        return area_patches + puck_patches + arrow_patches
 
-        [axes.add_patch(patch) for patch in puck_patches]
+    
+    def _animate(self, frame_i, position_history, velocity_history, axes, area_patches, puck_patches, arrow_patches):
+        for puck_i, (puck_position, puck_velocity) in enumerate(zip(
+            position_history[frame_i], velocity_history[frame_i]
+        )):
+            puck_patches[puck_i].center = puck_position
+            puck_patches[puck_i].set_visible(True)# = True
+            arrow_patches[puck_i].remove()
+            arrow_patches[puck_i] = plt.Arrow(*puck_position.clone(), *puck_velocity.clone(), color="black")
 
-        plt.axis("equal")
-        plt.xlim([0.0, self.config.board_width])
-        plt.ylim([0.0, self.three_area[1][1]])
-        plt.show()
+        [axes.add_patch(patch) for patch in arrow_patches]
+
+        return area_patches + puck_patches + arrow_patches
 
 
     def _end_turn(self):
