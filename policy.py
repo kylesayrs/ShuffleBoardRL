@@ -35,14 +35,18 @@ class EGreedyPolicyWithNoise(Policy):
 
         # epsilon chance of picking random (feasible) choice
         if numpy.random.choice([True, False], p=[self.epsilon, 1 - self.epsilon]):
-            action[0] += torch.normal(torch.tensor(0.0), torch.tensor(self.noise_factor * 10.0)) * action[0]
-            action[1] += torch.normal(torch.tensor(0.0), torch.tensor(self.noise_factor * torch.pi)) * action[1]
-            action[2] += torch.normal(torch.tensor(0.0), torch.tensor(self.noise_factor * self.max_magnitude)) * action[2]
-
-        else:
             action = torch.rand((3, )) * torch.tensor([10.0, torch.pi, self.max_magnitude])
 
-        return action
+        else:
+            action[0] += torch.normal(torch.tensor(0.0), torch.tensor(self.noise_factor * 10.0))
+            action[1] += torch.normal(torch.tensor(0.0), torch.tensor(self.noise_factor * torch.pi))
+            action[2] += torch.normal(torch.tensor(0.0), torch.tensor(self.noise_factor * self.max_magnitude))
+
+            action[0] = torch.clamp(action[0], 0.0, 10.0)
+            action[1] = torch.clamp(action[1], 0.0, torch.pi)
+            action[2] = torch.clamp(action[2], 0.0, self.max_magnitude)
+
+        return action.clone()
     
 
     def update(self, training_progress: float):

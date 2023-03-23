@@ -17,7 +17,8 @@ class QualityBaseModel(torch.nn.Module):
 
         self.linear_0 = torch.nn.Linear(self.state_length + self.action_length, self.state_length)
         self.linear_1 = torch.nn.Linear(self.state_length, self.state_length)
-        self.linear_2 = torch.nn.Linear(self.state_length, 1)
+        self.linear_2 = torch.nn.Linear(self.state_length, self.state_length)
+        self.linear_3 = torch.nn.Linear(self.state_length, 1)
 
         self.relu = torch.nn.ReLU()
 
@@ -38,6 +39,8 @@ class QualityBaseModel(torch.nn.Module):
         x = self.linear_1(x)
         x = self.relu(x)
         x = self.linear_2(x)
+        x = self.relu(x)
+        x = self.linear_3(x)
 
         return x
     
@@ -86,12 +89,12 @@ class ActorBaseModel(torch.nn.Module):
             (self.position_bounds[1] - self.position_bounds[0]),
             (self.angle[1] - self.angle[0]),
             (self.magnitude[1] - self.magnitude[0])
-        ], device=x.device)
+        ], device=x.device, requires_grad=False)
         self.offset = torch.tensor([
             self.position_bounds[0],
             self.angle[0],
             self.magnitude[0],
-        ], device=x.device)
+        ], device=x.device, requires_grad=False)
 
         x = x * self.scale
         x = x + self.offset
@@ -146,7 +149,7 @@ class DDPG:
         )
         actor_optimizer = torch.optim.Adam(
             self.actor_model_query.parameters(),
-            lr=self.quality_lr
+            lr=self.actor_lr
         )
 
         return quality_optimizer, actor_optimizer
@@ -236,10 +239,12 @@ class DDPG:
         # forward
         self.actor_optimizer.zero_grad()
         actor_actions = self.actor_model_query(states)
+        #print(actor_actions)
 
         # TODO: Check whether freezing unfreezing is necessary
         self._freeze_network(self.quality_model_query)
         actor_action_qualities = self.quality_model_query(states, actor_actions)
+        #print(actor_action_qualities)
 
         # backwards
         #print(actor_action_qualities)
@@ -256,7 +261,7 @@ class DDPG:
             pass
             #actor_actions = self.actor_model_query(states)
             #actor_action_qualities = self.quality_model_query(states, actor_actions)
-            #print((-1 * torch.sum(actor_action_qualities)).item())
+            #print((-1 * torch.mean(actor_action_qualities)))
 
             #exit(0)
 

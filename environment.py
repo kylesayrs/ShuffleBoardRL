@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Optional
 
 import torch
 import matplotlib.pyplot as plt
@@ -46,10 +46,11 @@ class ShuffleBoardEnvironment:
         return one_area, two_area, three_area, board_area
 
 
-    def get_reward(self) -> float:
+    def get_reward(self, turn: Optional[int] = None) -> float:
+        current_turn = turn if turn is not None else self.current_turn
         current_turn_puck_positions = self.puck_positions[
-            self.e_config.num_turns * self.current_turn:
-            self.e_config.num_turns * (self.current_turn + 1)
+            self.e_config.num_turns * current_turn:
+            self.e_config.num_turns * (current_turn + 1)
         ]
 
         score = 0
@@ -149,6 +150,7 @@ class ShuffleBoardEnvironment:
 
         if animate:
             self._show_animation(position_history, velocity_history, simulation_step_i + 1)
+            print(f"0 score: {self.get_reward(0)} | 1 score: {self.get_reward(1)}")
 
 
     def _show_animation(self, position_history, velocity_history, num_frames):
@@ -238,10 +240,9 @@ if __name__ == "__main__":
     environment_config = EnvironmentConfig()
 
     environment = ShuffleBoardEnvironment(environment_config)
-    print(environment.get_reward())
 
-    environment.perform_action(torch.tensor([5.0, torch.pi / 2, 0.3]), animate=True)
+    #environment.perform_action(torch.tensor([5.0, torch.pi / 2, 0.3]), animate=True)
     #environment.perform_action(torch.tensor([1.0000e+01, 4.6919e-09, 1.9686e-06]), animate=True)
     #environment.perform_action(torch.tensor([7.1223, 2.0379, 1.5240]), animate=True)
-    print(environment.get_reward())
+    environment.perform_action(torch.tensor([2.4784, 0.3611, 0.0540]), animate=True)
     environment.end_turn()

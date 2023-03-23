@@ -15,7 +15,8 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
     quality_losses = []
     actor_losses = []
     metrics = {}
-    rewards = []
+    zero_rewards = []
+    one_rewards = []
 
     for episode_i in range(config.optim.num_episodes):
         environment = ShuffleBoardEnvironment(config.env, config.device)
@@ -38,7 +39,8 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
 
             # end turn
             policy.update(episode_i / config.optim.num_episodes)
-            rewards.append(environment.get_reward())
+            zero_rewards.append(environment.get_reward(0))
+            one_rewards.append(environment.get_reward(1))
             environment.end_turn()
 
         # cycle: perform optimization
@@ -63,7 +65,7 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
             if config.verbosity >= 1:
                 print(
                     f" | {episode_i} / {config.optim.num_episodes}"
-                    f" | {numpy.mean(rewards).item():.1f} | "
+                    f" | {numpy.mean(zero_rewards):.1f} : {numpy.mean(one_rewards):.1f}"
                 , end="")
 
             if config.verbosity >= 2:
@@ -78,7 +80,8 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
             if config.verbosity > 0:
                 print()
 
-            rewards = []
+            zero_rewards = []
+            one_rewards = []
 
     return ddpg, metrics
 
