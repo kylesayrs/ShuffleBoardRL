@@ -78,11 +78,13 @@ class ActorBaseModel(torch.nn.Module):
         #print(x)
 
         # network
-        x = self.linear_0(x)
-        x = self.relu(x)
-        x = self.linear_1(x)
-        x = self.relu(x)
+        #x = self.linear_0(x)
         x = self.linear_2(x)
+        #print(x)
+        #x = self.relu(x)
+        #x = self.linear_1(x)
+        #x = self.relu(x)
+        #x = self.linear_2(x)
         x = self.sigmoid(x)
 
         self.scale = torch.tensor([

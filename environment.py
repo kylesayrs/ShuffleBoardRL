@@ -53,10 +53,10 @@ class ShuffleBoardEnvironment:
             self.e_config.num_turns * (current_turn + 1)
         ]
 
-        score = 0
-        score += 1 * get_num_pucks_in_area(current_turn_puck_positions, *self.one_area)
+        score = -1
+        score += 2 * get_num_pucks_in_area(current_turn_puck_positions, *self.one_area)
         score += 5 * get_num_pucks_in_area(current_turn_puck_positions, *self.two_area)
-        score += 10 * get_num_pucks_in_area(current_turn_puck_positions, *self.three_area)
+        score += 7 * get_num_pucks_in_area(current_turn_puck_positions, *self.three_area)
 
         return score
 

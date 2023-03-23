@@ -31,7 +31,7 @@ class EGreedyPolicyWithNoise(Policy):
 
 
     def get_action(self, ddpg: DDPG, state: torch.Tensor, network: str = "query") -> torch.Tensor:
-        action = ddpg.infer_action(state, network=network)
+        action = self.get_q_action(ddpg, state, network)
 
         # epsilon chance of picking random (feasible) choice
         if numpy.random.choice([True, False], p=[self.epsilon, 1 - self.epsilon]):
@@ -47,6 +47,10 @@ class EGreedyPolicyWithNoise(Policy):
             action[2] = torch.clamp(action[2], 0.0, self.max_magnitude)
 
         return action.clone()
+    
+
+    def get_q_action(self, ddpg: DDPG, state: torch.Tensor, network: str = "query"):
+        return ddpg.infer_action(state, network=network)
     
 
     def update(self, training_progress: float):

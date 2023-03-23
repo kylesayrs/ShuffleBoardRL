@@ -33,7 +33,7 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
                 action=action,
                 reward=environment.get_reward(),
                 next_state=environment.get_state(),
-                is_finished=environment.is_finished()
+                is_finished=True#environment.is_finished()
             )
             replay_buffer.enqueue(replay)
 
@@ -41,6 +41,7 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
             policy.update(episode_i / config.optim.num_episodes)
             zero_rewards.append(environment.get_reward(0))
             one_rewards.append(environment.get_reward(1))
+            break
             environment.end_turn()
 
         # cycle: perform optimization
@@ -61,7 +62,7 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
         # logging:
         if episode_i % config.logging_rate == 0:
             #visualize_game(ddpg, config, num_turns=1)
-            print(action)
+            print(policy.get_q_action(ddpg, ShuffleBoardEnvironment(config.env, config.device).get_state(), "query"))
             if config.verbosity >= 1:
                 print(
                     f" | {episode_i} / {config.optim.num_episodes}"

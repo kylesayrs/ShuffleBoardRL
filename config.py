@@ -8,19 +8,19 @@ class EnvironmentConfig(BaseModel):
     three_height: float = Field(default=2.0)
     
     num_turns: int = Field(default=1)
-    puck_radius: float = Field(default=0.5)
+    puck_radius: float = Field(default=0.1)
     friction_coef: float = Field(default=0.9)
-    max_agent_magnitude: float = Field(default=2.0)
+    max_agent_magnitude: float = Field(default=5.0)
 
-    simulation_h: float = Field(default=2.5)
-    max_time_steps: int = Field(default=500)
+    simulation_h: float = Field(default=2.0)
+    max_time_steps: int = Field(default=1000)
     min_velocity: float = Field(default=0.05)
 
 
 class Optimization(BaseModel):
     gamma: float = Field(default=0.1)
-    quality_lr: float = Field(default=0.01)
-    actor_lr: float = Field(default=1.e-7)
+    quality_lr: float = Field(default=1e-2)
+    actor_lr: float = Field(default=5e-3)
     quality_momentum: float = Field(default=0.05)
     actor_momentum: float = Field(default=0.05)
 
