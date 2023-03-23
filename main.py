@@ -24,25 +24,31 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
         while not environment.is_finished():
             # do action in environment
             state = environment.get_state()
+            import torch
             action = policy.get_action(ddpg, state, "query")
             environment.perform_action(action)
+            reward = environment.get_reward()
+            if environment.current_turn == 0:
+                zero_rewards.append(environment.get_reward(0))
+            else:
+                one_rewards.append(environment.get_reward(1))
+
+            environment.end_turn()
+            next_state = environment.get_state()
+            is_finished = environment.is_finished()
 
             # save replay of action
             replay = Replay(
                 state=state,
                 action=action,
-                reward=environment.get_reward(),
-                next_state=environment.get_state(),
-                is_finished=True#environment.is_finished()
+                reward=reward,
+                next_state=next_state,
+                is_finished=is_finished,
             )
-            replay_buffer.enqueue(replay)
+            if is_finished:  # EXPERIMENT: only train player 1
+                replay_buffer.enqueue(replay)
 
-            # end turn
             policy.update(episode_i / config.optim.num_episodes)
-            zero_rewards.append(environment.get_reward(0))
-            one_rewards.append(environment.get_reward(1))
-            break
-            environment.end_turn()
 
         # cycle: perform optimization
         if episode_i % config.optim.episodes_per_cycle == 0:

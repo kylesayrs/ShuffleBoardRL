@@ -12,7 +12,7 @@ class QualityBaseModel(torch.nn.Module):
         
         self.num_turns = num_turns
 
-        self.state_length = (self.num_turns * 4) + 2
+        self.state_length = (self.num_turns * 4) + 3
         self.action_length = 3
 
         self.linear_0 = torch.nn.Linear(self.state_length + self.action_length, self.state_length)
@@ -53,7 +53,7 @@ class ActorBaseModel(torch.nn.Module):
         self.board_width = environment_config.board_width
         self.max_magnitude = environment_config.max_agent_magnitude
 
-        self.state_length = (self.num_turns * 4) + 2
+        self.state_length = (self.num_turns * 4) + 3
         self.action_length = 3
 
         self.position_bounds = [0.0, self.board_width]
@@ -75,16 +75,13 @@ class ActorBaseModel(torch.nn.Module):
         # preprocessing
         x = state
         x = x.to(torch.float32)
-        #print(x)
 
         # network
-        #x = self.linear_0(x)
-        x = self.linear_2(x)
-        #print(x)
-        #x = self.relu(x)
+        x = self.linear_0(x)
+        x = self.relu(x)
         #x = self.linear_1(x)
         #x = self.relu(x)
-        #x = self.linear_2(x)
+        x = self.linear_2(x)
         x = self.sigmoid(x)
 
         self.scale = torch.tensor([

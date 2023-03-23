@@ -18,7 +18,7 @@ class EnvironmentConfig(BaseModel):
 
 
 class Optimization(BaseModel):
-    gamma: float = Field(default=0.1)
+    gamma: float = Field(default=0.0)
     quality_lr: float = Field(default=1e-2)
     actor_lr: float = Field(default=5e-3)
     quality_momentum: float = Field(default=0.05)

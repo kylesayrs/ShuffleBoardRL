@@ -19,7 +19,7 @@ class ShuffleBoardEnvironment:
         self.puck_positions = self.OFF_BOARD.repeat(int(2 * self.e_config.num_turns)).reshape(int(2 * self.e_config.num_turns), 2).to(self.device)
         self.puck_velocities = torch.zeros(self.puck_positions.shape, device=self.device)
         self.turns_state = torch.tensor([self.e_config.num_turns, self.e_config.num_turns], dtype=torch.int8).to(self.device)
-        self.current_turn = 0
+        self.current_turn = torch.tensor(0)
 
 
     def _get_score_areas(self):
@@ -48,15 +48,25 @@ class ShuffleBoardEnvironment:
 
     def get_reward(self, turn: Optional[int] = None) -> float:
         current_turn = turn if turn is not None else self.current_turn
+
         current_turn_puck_positions = self.puck_positions[
             self.e_config.num_turns * current_turn:
             self.e_config.num_turns * (current_turn + 1)
         ]
+        opponent_puck_positions = self.puck_positions[
+            self.e_config.num_turns * (1 - current_turn):
+            self.e_config.num_turns * (1 - current_turn + 1)
+        ]
 
         score = -1
-        score += 2 * get_num_pucks_in_area(current_turn_puck_positions, *self.one_area)
+
+        score += 1 * get_num_pucks_in_area(current_turn_puck_positions, *self.one_area)
         score += 5 * get_num_pucks_in_area(current_turn_puck_positions, *self.two_area)
-        score += 7 * get_num_pucks_in_area(current_turn_puck_positions, *self.three_area)
+        score += 10 * get_num_pucks_in_area(current_turn_puck_positions, *self.three_area)
+
+        #score -= 2 * get_num_pucks_in_area(opponent_puck_positions, *self.one_area)
+        #score -= 3 * get_num_pucks_in_area(opponent_puck_positions, *self.two_area)
+        #score -= 4 * get_num_pucks_in_area(opponent_puck_positions, *self.three_area)
 
         return score
 
@@ -66,7 +76,7 @@ class ShuffleBoardEnvironment:
 
 
     def get_state(self) -> torch.tensor:
-        return torch.cat([self.puck_positions.ravel(), self.turns_state])
+        return torch.cat([self.puck_positions.ravel(), self.turns_state, self.current_turn.unsqueeze(0)])
 
 
     def perform_action(self, action: torch.tensor, animate: bool = False):
@@ -107,6 +117,10 @@ class ShuffleBoardEnvironment:
                 for a_index_offset, puck_b_position in enumerate(self.puck_positions[puck_a_index + 1:]):
                     puck_b_index = puck_a_index + a_index_offset + 1
                     if all(puck_a_position == self.OFF_BOARD) or all(puck_b_position == self.OFF_BOARD): continue
+
+                    # edge case: a and b have same positions
+                    if all(puck_a_position == puck_b_position):
+                        puck_b_position += torch.tensor([0.01, 0.01], device=self.device)
 
                     intersection_radius = self.e_config.puck_radius * 2 - torch.norm(puck_a_position - puck_b_position)
                     if intersection_radius > 0:
@@ -149,6 +163,7 @@ class ShuffleBoardEnvironment:
             velocity_history.append(self.puck_velocities.clone())
 
         if animate:
+            print(f"action: {action.tolist()}")
             self._show_animation(position_history, velocity_history, simulation_step_i + 1)
             print(f"0 score: {self.get_reward(0)} | 1 score: {self.get_reward(1)}")
 
@@ -244,5 +259,10 @@ if __name__ == "__main__":
     #environment.perform_action(torch.tensor([5.0, torch.pi / 2, 0.3]), animate=True)
     #environment.perform_action(torch.tensor([1.0000e+01, 4.6919e-09, 1.9686e-06]), animate=True)
     #environment.perform_action(torch.tensor([7.1223, 2.0379, 1.5240]), animate=True)
-    environment.perform_action(torch.tensor([2.4784, 0.3611, 0.0540]), animate=True)
+    environment.perform_action(torch.tensor([7.1223, 2.0379, 1.5240]), animate=True)
+    print(environment.get_reward())
+    environment.end_turn()
+
+    environment.perform_action(torch.tensor([7.1223, 2.0379, 1.4240]), animate=True)
+    print(environment.get_reward())
     environment.end_turn()
