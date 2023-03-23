@@ -2,6 +2,7 @@ from typing import List, Any
 from pydantic import BaseModel, Field
 
 import torch
+import numpy
 
 
 class Replay(BaseModel):
@@ -29,11 +30,15 @@ class CircularBuffer:
     def enqueue_multiple(self, elements: List[Any]):
         self._queue += elements
         self._queue = self._queue[-self._size:]
-        
+
 
     def to_list(self):
         return self._queue
 
+
+    def get_random_batch(self, batch_size: int):
+        return numpy.random.choice(self.to_list(), batch_size)
+        
 
     def __rep__(self):
         return self.to_list()

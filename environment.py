@@ -4,21 +4,21 @@ import torch
 import matplotlib.pyplot as plt
 from matplotlib import animation
 
-from config import Config
+from config import EnvironmentConfig
 from utils import get_num_pucks_in_area, puck_in_area
 
 
-OFF_BOARD = torch.tensor([-1000.0, -1000.0])
-
-class Environment:
-    def __init__(self, config: Config) -> None:
-        self.e_config = config.environment
+class ShuffleBoardEnvironment:
+    def __init__(self, environment_config: EnvironmentConfig, device: str = "cpu") -> None:
+        self.e_config = environment_config
+        self.device = device
 
         self.one_area, self.two_area, self.three_area, self.board_area = self._get_score_areas()
 
-        self.puck_positions = OFF_BOARD.repeat(int(2 * self.e_config.num_turns)).reshape(int(2 * self.e_config.num_turns), 2)
-        self.puck_velocities = torch.zeros(self.puck_positions.shape)
-        self.turns_state = torch.tensor([self.e_config.num_turns, self.e_config.num_turns], dtype=torch.int8)
+        self.OFF_BOARD = torch.tensor([-1.0, -1.0], device=self.device)
+        self.puck_positions = self.OFF_BOARD.repeat(int(2 * self.e_config.num_turns)).reshape(int(2 * self.e_config.num_turns), 2).to(self.device)
+        self.puck_velocities = torch.zeros(self.puck_positions.shape, device=self.device)
+        self.turns_state = torch.tensor([self.e_config.num_turns, self.e_config.num_turns], dtype=torch.int8).to(self.device)
         self.current_turn = 0
 
 
@@ -26,17 +26,17 @@ class Environment:
         one_area = torch.tensor([
             [0.0, 0.0],
             [self.e_config.board_width, self.e_config.one_height]
-        ])
+        ], device=self.device)
 
         two_area = torch.tensor([
             [0.0, one_area[1][1]],
             [self.e_config.board_width, one_area[1][1] + self.e_config.two_height]
-        ])
+        ], device=self.device)
 
         three_area = torch.tensor([
             [0.0, two_area[1][1]],
             [self.e_config.board_width, two_area[1][1] + self.e_config.three_height]
-        ])
+        ], device=self.device)
 
         board_area = torch.vstack([
             one_area[0],
@@ -47,11 +47,16 @@ class Environment:
 
 
     def get_reward(self) -> float:
+        current_turn_puck_positions = self.puck_positions[
+            self.e_config.num_turns * self.current_turn:
+            self.e_config.num_turns * (self.current_turn + 1)
+        ]
+
         score = 0
-        score += 1 * get_num_pucks_in_area(self.puck_positions, *self.one_area)
-        score += 2 * get_num_pucks_in_area(self.puck_positions, *self.two_area)
-        score += 3 * get_num_pucks_in_area(self.puck_positions, *self.three_area)
-        
+        score += 1 * get_num_pucks_in_area(current_turn_puck_positions, *self.one_area)
+        score += 5 * get_num_pucks_in_area(current_turn_puck_positions, *self.two_area)
+        score += 10 * get_num_pucks_in_area(current_turn_puck_positions, *self.three_area)
+
         return score
 
 
@@ -60,31 +65,24 @@ class Environment:
 
 
     def get_state(self) -> torch.tensor:
-        return torch.cat([self.puck_positions.unravel(), self.turns_state])
+        return torch.cat([self.puck_positions.ravel(), self.turns_state])
 
 
-    def perform_action(
-        self,
-        x_position:torch.tensor,
-        angle: torch.tensor,
-        magnitude: torch.tensor
-    ):
-        # preprocess actions
-        x_position = torch.clip(x_position, 0.0, self.e_config.board_width)
-        angle = torch.clip(angle, 0.0, torch.pi)
-        magnitude = torch.clip(magnitude, 0.0, self.e_config.max_agent_magnitude)
+    def perform_action(self, action: torch.tensor, animate: bool = False):
+        # unpack and preprocess actions
+        x_position, angle, magnitude = action.clone()
 
         # used for indexing the new puck
         turns_left = self.turns_state[self.current_turn]
         new_puck_index = int(self.current_turn * self.e_config.num_turns + turns_left - 1)
 
         # positions
-        new_puck_position = torch.tensor([x_position, 0.0])
+        new_puck_position = torch.tensor([x_position, 0.0], device=self.device)
         self.puck_positions[new_puck_index] = new_puck_position
 
         # velocities
-        new_puck_velocity = torch.tensor([torch.cos(angle), torch.sin(angle)]) * magnitude
-        self.puck_velocities = torch.zeros(self.puck_positions.shape)
+        new_puck_velocity = torch.tensor([torch.cos(angle), torch.sin(angle)], device=self.device) * magnitude
+        self.puck_velocities = torch.zeros(self.puck_positions.shape, device=self.device)
         self.puck_velocities[new_puck_index] = new_puck_velocity
 
         # factor by simulation_h
@@ -107,7 +105,7 @@ class Environment:
             for puck_a_index, puck_a_position in enumerate(self.puck_positions):
                 for a_index_offset, puck_b_position in enumerate(self.puck_positions[puck_a_index + 1:]):
                     puck_b_index = puck_a_index + a_index_offset + 1
-                    if all(puck_a_position == OFF_BOARD) or all(puck_b_position == OFF_BOARD): continue
+                    if all(puck_a_position == self.OFF_BOARD) or all(puck_b_position == self.OFF_BOARD): continue
 
                     intersection_radius = self.e_config.puck_radius * 2 - torch.norm(puck_a_position - puck_b_position)
                     if intersection_radius > 0:
@@ -115,7 +113,7 @@ class Environment:
                         total_velocity = self.puck_velocities[puck_a_index] + self.puck_velocities[puck_b_index]
 
                         normal_unit_vector = (puck_a_position - puck_b_position) / torch.norm(puck_a_position - puck_b_position)
-                        perpendicular_unit_vector = torch.flip(normal_unit_vector, dims=(0, )) * torch.tensor([1, -1])
+                        perpendicular_unit_vector = torch.flip(normal_unit_vector, dims=(0, )) * torch.tensor([1, -1], device=self.device)
                         
                         normal_velocity = torch.dot(normal_unit_vector, total_velocity) * normal_unit_vector
                         perpendicular_velocity = torch.dot(perpendicular_unit_vector, total_velocity) * perpendicular_unit_vector
@@ -139,8 +137,8 @@ class Environment:
             # check for out-of-bounds
             for puck_index, puck_position in enumerate(self.puck_positions):
                 if not puck_in_area(puck_position, *self.board_area):
-                    self.puck_positions[puck_index] = OFF_BOARD
-                    self.puck_velocities[puck_index] = torch.tensor([0.0, 0.0])
+                    self.puck_positions[puck_index] = self.OFF_BOARD
+                    self.puck_velocities[puck_index] = torch.tensor([0.0, 0.0], device=self.device)
 
             # check for low velocities
             if torch.all(torch.abs(self.puck_velocities) < min_simulation_velocity):
@@ -149,10 +147,8 @@ class Environment:
             position_history.append(self.puck_positions.clone())
             velocity_history.append(self.puck_velocities.clone())
 
-        self._show_animation(position_history, velocity_history, simulation_step_i)
-
-        # end turn
-        self._end_turn()
+        if animate:
+            self._show_animation(position_history, velocity_history, simulation_step_i + 1)
 
 
     def _show_animation(self, position_history, velocity_history, num_frames):
@@ -206,8 +202,12 @@ class Environment:
             ),
         ]
 
-        for puck_position, puck_velocity in zip(position_history[-1], velocity_history[-1]):
-            puck_patches.append(plt.Circle(puck_position.clone(), self.e_config.puck_radius, visible=False))
+        for puck_index, (puck_position, puck_velocity) in enumerate(zip(
+            position_history[-1], velocity_history[-1]
+        )):
+            puck_color = "blue" if puck_index < self.e_config.num_turns else "orange"
+            
+            puck_patches.append(plt.Circle(puck_position.clone(), self.e_config.puck_radius, color=puck_color, visible=False))
             arrow_patches.append(plt.Arrow(*puck_position.clone(), *puck_velocity.clone(), color="black", visible=False))
     
         [axes.add_patch(patch) for patch in (area_patches + puck_patches + arrow_patches)]
@@ -229,36 +229,19 @@ class Environment:
         return area_patches + puck_patches + arrow_patches
 
 
-    def _end_turn(self):
+    def end_turn(self):
         self.turns_state[self.current_turn] -= 1
         self.current_turn = 1 - self.current_turn
 
 
 if __name__ == "__main__":
-    config = Config()
-    environment = Environment(config)
-    environment.perform_action(
-        x_position=torch.tensor(5.0),
-        angle=torch.tensor(torch.pi / 2),
-        magnitude=torch.tensor(0.3),
-    )
-    environment.perform_action(
-        x_position=torch.tensor(5.5),
-        angle=torch.tensor(torch.pi / 2),
-        magnitude=torch.tensor(0.5),
-    )
-    environment.perform_action(
-        x_position=torch.tensor(3.5),
-        angle=torch.tensor(torch.pi / 2),
-        magnitude=torch.tensor(0.7),
-    )
-    environment.perform_action(
-        x_position=torch.tensor(5.0),
-        angle=torch.tensor(torch.pi / 2),
-        magnitude=torch.tensor(0.9),
-    )
-    environment.perform_action(
-        x_position=torch.tensor(5.0),
-        angle=torch.tensor(torch.pi / 2),
-        magnitude=torch.tensor(0.9),
-    )
+    environment_config = EnvironmentConfig()
+
+    environment = ShuffleBoardEnvironment(environment_config)
+    print(environment.get_reward())
+
+    environment.perform_action(torch.tensor([5.0, torch.pi / 2, 0.3]), animate=True)
+    #environment.perform_action(torch.tensor([1.0000e+01, 4.6919e-09, 1.9686e-06]), animate=True)
+    #environment.perform_action(torch.tensor([7.1223, 2.0379, 1.5240]), animate=True)
+    print(environment.get_reward())
+    environment.end_turn()

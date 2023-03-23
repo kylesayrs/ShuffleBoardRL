@@ -3,6 +3,7 @@ from typing import List
 import torch
 
 from replay import Replay
+from config import EnvironmentConfig
 
 
 class QualityBaseModel(torch.nn.Module):
@@ -11,7 +12,7 @@ class QualityBaseModel(torch.nn.Module):
         
         self.num_turns = num_turns
 
-        self.state_length = (self.num_turns * 2) + 2
+        self.state_length = (self.num_turns * 4) + 2
         self.action_length = 3
 
         self.linear_0 = torch.nn.Linear(self.state_length + self.action_length, self.state_length)
@@ -42,30 +43,36 @@ class QualityBaseModel(torch.nn.Module):
     
 
 class ActorBaseModel(torch.nn.Module):
-    def __init__(self, num_turns: int) -> None:
+    def __init__(self, num_turns: int, environment_config: EnvironmentConfig):
         super().__init__()
         
         self.num_turns = num_turns
+        self.board_width = environment_config.board_width
+        self.max_magnitude = environment_config.max_agent_magnitude
 
-        self.state_length = (self.num_turns * 2) + 2
+        self.state_length = (self.num_turns * 4) + 2
         self.action_length = 3
 
-        self.linear_0 = torch.nn.Linear(self.state_length + self.action_length, self.state_length)
+        self.position_bounds = [0.0, self.board_width]
+        self.angle = [0.0, torch.pi]
+        self.magnitude = [0.0, self.max_magnitude]
+
+        self.linear_0 = torch.nn.Linear(self.state_length, self.state_length)
         self.linear_1 = torch.nn.Linear(self.state_length, self.state_length)
         self.linear_2 = torch.nn.Linear(self.state_length, self.action_length)
 
         self.relu = torch.nn.ReLU()
+        self.sigmoid = torch.nn.Sigmoid()
 
 
-    def forward(self, state: torch.Tensor, action: torch.Tensor):
+    def forward(self, state: torch.Tensor):
         assert len(state.shape) == 2, "ActorBaseModel forward must receive batch"
-        assert len(action.shape) == 2, "ActorBaseModel forward must receive batch"
         assert state.shape[1] == self.state_length, "Invalid state length"
-        assert action.shape[1] == self.action_length, "Invalid state length"
 
         # preprocessing
-        x = torch.concat([state, action], dim=1)
+        x = state
         x = x.to(torch.float32)
+        #print(x)
 
         # network
         x = self.linear_0(x)
@@ -73,6 +80,21 @@ class ActorBaseModel(torch.nn.Module):
         x = self.linear_1(x)
         x = self.relu(x)
         x = self.linear_2(x)
+        x = self.sigmoid(x)
+
+        self.scale = torch.tensor([
+            (self.position_bounds[1] - self.position_bounds[0]),
+            (self.angle[1] - self.angle[0]),
+            (self.magnitude[1] - self.magnitude[0])
+        ], device=x.device)
+        self.offset = torch.tensor([
+            self.position_bounds[0],
+            self.angle[0],
+            self.magnitude[0],
+        ], device=x.device)
+
+        x = x * self.scale
+        x = x + self.offset
 
         return x
 
@@ -84,24 +106,37 @@ class DDPG:
         gamma: float,
         quality_lr: float,
         actor_lr: float,
+        environment_config: EnvironmentConfig,
         device: str
     ) -> None:
         self.num_turns = num_turns
         self.gamma = gamma
         self.quality_lr = quality_lr
         self.actor_lr = actor_lr
+        self.e_config = environment_config
         self.device = device
 
         self.quality_model_query = QualityBaseModel(self.num_turns).to(self.device)
         self.quality_model_target = QualityBaseModel(self.num_turns).to(self.device)
-        self.actor_model_query = ActorBaseModel(self.num_turns).to(self.device)
-        self.actor_model_target = ActorBaseModel(self.num_turns).to(self.device)
-        self.update_target_networks(1.0)
+        self.actor_model_query = ActorBaseModel(self.num_turns, self.e_config).to(self.device)
+        self.actor_model_target = ActorBaseModel(self.num_turns, self.e_config).to(self.device)
+        self._freeze_network(self.quality_model_target)
+        self._freeze_network(self.actor_model_target)
+        self.update_target_networks(1.0, 1.0)
 
         self.quality_optimizer, self.actor_optimizer = self._make_optimizers()
 
         self.quality_criterion = torch.nn.MSELoss()
-        self.actor_criterion = torch.nn.L1Loss()
+
+
+    def _freeze_network(self, network: torch.nn.Module):
+        for param in network.parameters():
+            param.requires_grad = False
+
+    
+    def _unfreeze_network(self, network: torch.nn.Module):
+        for param in network.parameters():
+            param.requires_grad = True
 
 
     def _make_optimizers(self):
@@ -117,19 +152,23 @@ class DDPG:
         return quality_optimizer, actor_optimizer
 
 
-    def infer_action():
-        pass
+    def infer_action(self, state: torch.tensor, network="query"):
+        with torch.no_grad():
+            if network == "query":
+                return self.actor_model_query(state.unsqueeze(0))[0]
+            else:
+                return self.actor_model_target(state.unsqueeze(0))[0]
 
 
-    def update_target_networks(self, momentum: float):
+    def update_target_networks(self, quality_momentum: float, actor_momentum: float):
         with torch.no_grad():
             for query_param, target_param in zip(
                 self.quality_model_query.parameters(),
                 self.quality_model_target.parameters()
             ):
                 target_param.data = (
-                    momentum * query_param.data +
-                    (1 - momentum) * target_param.data
+                    quality_momentum * query_param.data +
+                    (1 - quality_momentum) * target_param.data
                 )
 
             for query_param, target_param in zip(
@@ -137,8 +176,8 @@ class DDPG:
                 self.actor_model_target.parameters()
             ):
                 target_param.data = (
-                    momentum * query_param.data +
-                    (1 - momentum) * target_param.data
+                    actor_momentum * query_param.data +
+                    (1 - actor_momentum) * target_param.data
                 )
 
 
@@ -151,8 +190,8 @@ class DDPG:
         is_finisheds = torch.tensor([replay.is_finished for replay in batch], device=self.device)
 
         # optimize networks
-        quality_loss = self.optimize_quality_network()
-        actor_loss = self.optimize_actor_network()
+        quality_loss = self.optimize_quality_network(states, actions, rewards, next_states, is_finisheds)
+        actor_loss = self.optimize_actor_network(states)
 
         return quality_loss, actor_loss
 
@@ -175,6 +214,7 @@ class DDPG:
 
             target_qualities = rewards + self.gamma * torch.max(future_action_qualities, dim=1).values
             target_qualities.to(torch.float32)
+            target_qualities = target_qualities.reshape((-1, 1))
         
         # forward
         self.quality_optimizer.zero_grad()
@@ -185,6 +225,10 @@ class DDPG:
         quality_loss.backward()
         self.quality_optimizer.step()
 
+        with torch.no_grad():
+            pass
+            #print(self.quality_criterion(target_qualities, self.quality_model_query(states, actions)).item())
+
         return quality_loss
     
 
@@ -192,13 +236,28 @@ class DDPG:
         # forward
         self.actor_optimizer.zero_grad()
         actor_actions = self.actor_model_query(states)
-        with torch.no_grad():
-            actor_action_qualities = self.quality_model_query(states, actor_actions)
+
+        # TODO: Check whether freezing unfreezing is necessary
+        self._freeze_network(self.quality_model_query)
+        actor_action_qualities = self.quality_model_query(states, actor_actions)
 
         # backwards
-        zeros = torch.zeros(actor_action_qualities.shape)
-        actor_loss = self.actor_criterion(zeros, -1 * actor_action_qualities)
+        #print(actor_action_qualities)
+        actor_loss = -1 * torch.mean(actor_action_qualities)
+        #print(actor_loss)
+        #print(actor_loss.item())
+        #exit(0)
         actor_loss.backward()
+        #print(actor_loss)
         self.actor_optimizer.step()
+        self._unfreeze_network(self.quality_model_query)
+
+        with torch.no_grad():
+            pass
+            #actor_actions = self.actor_model_query(states)
+            #actor_action_qualities = self.quality_model_query(states, actor_actions)
+            #print((-1 * torch.sum(actor_action_qualities)).item())
+
+            #exit(0)
 
         return actor_loss
