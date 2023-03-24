@@ -60,9 +60,9 @@ class ShuffleBoardEnvironment:
 
         score = -1
 
-        score += 1 * get_num_pucks_in_area(current_turn_puck_positions, *self.one_area)
-        score += 5 * get_num_pucks_in_area(current_turn_puck_positions, *self.two_area)
-        score += 10 * get_num_pucks_in_area(current_turn_puck_positions, *self.three_area)
+        score += 2 * get_num_pucks_in_area(current_turn_puck_positions, *self.one_area)
+        score += 3 * get_num_pucks_in_area(current_turn_puck_positions, *self.two_area)
+        score += 4 * get_num_pucks_in_area(current_turn_puck_positions, *self.three_area)
 
         #score -= 2 * get_num_pucks_in_area(opponent_puck_positions, *self.one_area)
         #score -= 3 * get_num_pucks_in_area(opponent_puck_positions, *self.two_area)
@@ -164,8 +164,8 @@ class ShuffleBoardEnvironment:
 
         if animate:
             print(f"action: {action.tolist()}")
-            self._show_animation(position_history, velocity_history, simulation_step_i + 1)
             print(f"0 score: {self.get_reward(0)} | 1 score: {self.get_reward(1)}")
+            self._show_animation(position_history, velocity_history, simulation_step_i + 1)
 
 
     def _show_animation(self, position_history, velocity_history, num_frames):
@@ -259,10 +259,20 @@ if __name__ == "__main__":
     #environment.perform_action(torch.tensor([5.0, torch.pi / 2, 0.3]), animate=True)
     #environment.perform_action(torch.tensor([1.0000e+01, 4.6919e-09, 1.9686e-06]), animate=True)
     #environment.perform_action(torch.tensor([7.1223, 2.0379, 1.5240]), animate=True)
-    environment.perform_action(torch.tensor([7.1223, 2.0379, 1.5240]), animate=True)
-    print(environment.get_reward())
+    environment.perform_action(torch.tensor([9.9689e+00, 1.8383e+00, 7.7488e-03]), animate=True)
+    environment.end_turn()
+    
+    environment.perform_action(torch.tensor([3.0218e+00, 1.0127e+00, 3.3153e-04]), animate=True)
     environment.end_turn()
 
-    environment.perform_action(torch.tensor([7.1223, 2.0379, 1.4240]), animate=True)
-    print(environment.get_reward())
+    environment.perform_action(torch.tensor([7.7780e+00, 1.0780e+00, 2.3508e-04]), animate=True)
+    environment.end_turn()
+
+    environment.perform_action(torch.tensor([5.9452e-01, 3.3496e-01, 1.4895e-04]), animate=True)
+    environment.end_turn()
+
+    environment.perform_action(torch.tensor([1.6794e+00, 5.1078e-01, 6.1319e-04]), animate=True)
+    environment.end_turn()
+
+    environment.perform_action(torch.tensor([7.2574e-01, 3.7334e-01, 5.4087e-04]), animate=True)
     environment.end_turn()

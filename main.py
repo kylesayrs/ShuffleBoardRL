@@ -6,7 +6,7 @@ from ddpg import DDPG
 
 from replay import CircularBuffer, Replay
 from environment import ShuffleBoardEnvironment
-from policy import Policy, EGreedyPolicyWithNoise
+from policy import Policy, SpinningUpEGreedyPolicyWithNoise
 #from train import train, evaluate
 
 
@@ -17,10 +17,13 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
     metrics = {}
     zero_rewards = []
     one_rewards = []
+    metrics["zero_rewards"] = []
+    metrics["one_rewards"] = []
 
     for episode_i in range(config.optim.num_episodes):
-        environment = ShuffleBoardEnvironment(config.env, config.device)
+        training_progress = episode_i / config.optim.num_episodes  # used later
 
+        environment = ShuffleBoardEnvironment(config.env, config.device)
         while not environment.is_finished():
             # do action in environment
             state = environment.get_state()
@@ -45,10 +48,10 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
                 next_state=next_state,
                 is_finished=is_finished,
             )
-            if is_finished:  # EXPERIMENT: only train player 1
-                replay_buffer.enqueue(replay)
+            replay_buffer.enqueue(replay)
 
-            policy.update(episode_i / config.optim.num_episodes)
+            policy.update(training_progress)
+            break
 
         # cycle: perform optimization
         if episode_i % config.optim.episodes_per_cycle == 0:
@@ -56,7 +59,7 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
             cum_quality_loss, cum_actor_loss = 0.0, 0.0
             for _ in range(config.optim.batches_per_cycle):
                 batch = replay_buffer.get_random_batch(config.optim.batch_size)
-                quality_loss, actor_loss = ddpg.optimize_batch(batch)
+                quality_loss, actor_loss = ddpg.optimize_batch(batch, training_progress)
 
                 cum_quality_loss += quality_loss.item()
                 cum_actor_loss += actor_loss.item()
@@ -87,6 +90,8 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
             if config.verbosity > 0:
                 print()
 
+            metrics["zero_rewards"].append(numpy.mean(zero_rewards))
+
             zero_rewards = []
             one_rewards = []
 
@@ -114,6 +119,7 @@ if __name__ == "__main__":
     ddpg = DDPG(
         config.env.num_turns,
         config.optim.gamma,
+        config.optim.spin_up_time,
         config.optim.quality_lr,
         config.optim.actor_lr,
         config.env,
@@ -123,7 +129,8 @@ if __name__ == "__main__":
     # train
     ddpg, train_metrics = train(
         ddpg,
-        EGreedyPolicyWithNoise(
+        SpinningUpEGreedyPolicyWithNoise(
+            config.optim.spin_up_time,
             config.optim.epsilon_max,
             config.optim.epsilon_min,
             config.optim.noise_factor,

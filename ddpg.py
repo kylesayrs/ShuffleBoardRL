@@ -15,10 +15,10 @@ class QualityBaseModel(torch.nn.Module):
         self.state_length = (self.num_turns * 4) + 3
         self.action_length = 3
 
-        self.linear_0 = torch.nn.Linear(self.state_length + self.action_length, self.state_length)
-        self.linear_1 = torch.nn.Linear(self.state_length, self.state_length)
-        self.linear_2 = torch.nn.Linear(self.state_length, self.state_length)
-        self.linear_3 = torch.nn.Linear(self.state_length, 1)
+        self.linear_0 = torch.nn.Linear(self.state_length + self.action_length, 512)
+        self.linear_1 = torch.nn.Linear(512, 256)
+        self.linear_2 = torch.nn.Linear(256, 256)
+        self.linear_3 = torch.nn.Linear(256, 1)
 
         self.relu = torch.nn.ReLU()
 
@@ -41,6 +41,8 @@ class QualityBaseModel(torch.nn.Module):
         x = self.linear_2(x)
         x = self.relu(x)
         x = self.linear_3(x)
+        #x = self.relu(x)
+        #x = self.linear_4(x)
 
         return x
     
@@ -106,6 +108,7 @@ class DDPG:
         self,
         num_turns: int,
         gamma: float,
+        spin_up_time: float,
         quality_lr: float,
         actor_lr: float,
         environment_config: EnvironmentConfig,
@@ -113,6 +116,7 @@ class DDPG:
     ) -> None:
         self.num_turns = num_turns
         self.gamma = gamma
+        self.spin_up_time = spin_up_time
         self.quality_lr = quality_lr
         self.actor_lr = actor_lr
         self.e_config = environment_config
@@ -183,7 +187,7 @@ class DDPG:
                 )
 
 
-    def optimize_batch(self, batch: List[Replay]):
+    def optimize_batch(self, batch: List[Replay], training_progress: float):
         # unpack batch
         states = torch.vstack([replay.state for replay in batch])
         actions = torch.vstack([replay.action for replay in batch])
@@ -193,7 +197,10 @@ class DDPG:
 
         # optimize networks
         quality_loss = self.optimize_quality_network(states, actions, rewards, next_states, is_finisheds)
-        actor_loss = self.optimize_actor_network(states)
+        if training_progress > self.spin_up_time:
+            actor_loss = self.optimize_actor_network(states)
+        else:
+            actor_loss = torch.tensor(0.0)
 
         return quality_loss, actor_loss
 
@@ -214,7 +221,7 @@ class DDPG:
             is_not_finished_transposed = torch.transpose(is_not_finished.unsqueeze(0), 0, 1)
             future_action_qualities *= is_not_finished_transposed  # zero if finished
 
-            target_qualities = rewards + self.gamma * torch.max(future_action_qualities, dim=1).values
+            target_qualities = rewards# + self.gamma * torch.max(future_action_qualities, dim=1).values
             target_qualities.to(torch.float32)
             target_qualities = target_qualities.reshape((-1, 1))
         
@@ -223,8 +230,12 @@ class DDPG:
         quality_outputs = self.quality_model_query(states, actions)
 
         # backwards
+        #print(rewards)
+        #print(target_qualities)
+        #print(quality_outputs)
         quality_loss = self.quality_criterion(target_qualities, quality_outputs)
         quality_loss.backward()
+        #print(quality_loss)
         self.quality_optimizer.step()
 
         with torch.no_grad():
@@ -246,14 +257,11 @@ class DDPG:
         #print(actor_action_qualities)
 
         # backwards
-        #print(actor_action_qualities)
+        #print(actor_actions)
         actor_loss = -1 * torch.mean(actor_action_qualities)
-        #print(actor_loss)
-        #print(actor_loss.item())
-        #exit(0)
         actor_loss.backward()
-        #print(actor_loss)
         self.actor_optimizer.step()
+        #print(actor_actions)
         self._unfreeze_network(self.quality_model_query)
 
         with torch.no_grad():

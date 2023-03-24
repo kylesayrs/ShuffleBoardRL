@@ -14,14 +14,16 @@ class Policy(ABC):
         pass
 
 
-class EGreedyPolicyWithNoise(Policy):
+class SpinningUpEGreedyPolicyWithNoise(Policy):
     def __init__(
         self,
+        spin_up_time: float,
         epsilon_max: float,
         epsilon_min: float,
         noise_factor: float,
         max_magnitude: float
     ):
+        self.spin_up_time = spin_up_time
         self.epsilon_max = epsilon_max
         self.epsilon_min = epsilon_min
         self.noise_factor = noise_factor
@@ -54,4 +56,8 @@ class EGreedyPolicyWithNoise(Policy):
     
 
     def update(self, training_progress: float):
-        self.epsilon = training_progress * (self.epsilon_max - self.epsilon_min) + self.epsilon_min
+        if training_progress > self.spin_up_time:
+            self.epsilon = (
+                ((1 - (training_progress - self.spin_up_time) / self.spin_up_time)) *
+                (self.epsilon_max - self.epsilon_min) + self.epsilon_min
+            )
