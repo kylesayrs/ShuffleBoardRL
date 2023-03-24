@@ -19,7 +19,7 @@ class ShuffleBoardEnvironment:
         self.puck_positions = self.OFF_BOARD.repeat(int(2 * self.e_config.num_turns)).reshape(int(2 * self.e_config.num_turns), 2).to(self.device)
         self.puck_velocities = torch.zeros(self.puck_positions.shape, device=self.device)
         self.turns_state = torch.tensor([self.e_config.num_turns, self.e_config.num_turns], dtype=torch.int8).to(self.device)
-        self.current_turn = torch.tensor(0)
+        self.current_turn = torch.tensor(0, device=self.device)
 
 
     def _get_score_areas(self):
@@ -256,23 +256,13 @@ if __name__ == "__main__":
 
     environment = ShuffleBoardEnvironment(environment_config)
 
-    #environment.perform_action(torch.tensor([5.0, torch.pi / 2, 0.3]), animate=True)
-    #environment.perform_action(torch.tensor([1.0000e+01, 4.6919e-09, 1.9686e-06]), animate=True)
-    #environment.perform_action(torch.tensor([7.1223, 2.0379, 1.5240]), animate=True)
-    environment.perform_action(torch.tensor([9.9689e+00, 1.8383e+00, 7.7488e-03]), animate=True)
-    environment.end_turn()
-    
-    environment.perform_action(torch.tensor([3.0218e+00, 1.0127e+00, 3.3153e-04]), animate=True)
-    environment.end_turn()
+    actions = [[7.432770729064941, 1.796961784362793, 2.4902806282043457],
+               [9.98676586151123, 1.916831135749817, 2.6191277503967285],
+               [9.999598503112793, 1.93975830078125, 2.551884412765503],
+               [9.997598648071289, 1.8871411085128784, 2.5698280334472656],
+               [9.931535720825195, 2.002199649810791, 1.20453679561615],
+               [9.397794723510742, 1.720679521560669, 0.3917841911315918]]
 
-    environment.perform_action(torch.tensor([7.7780e+00, 1.0780e+00, 2.3508e-04]), animate=True)
-    environment.end_turn()
-
-    environment.perform_action(torch.tensor([5.9452e-01, 3.3496e-01, 1.4895e-04]), animate=True)
-    environment.end_turn()
-
-    environment.perform_action(torch.tensor([1.6794e+00, 5.1078e-01, 6.1319e-04]), animate=True)
-    environment.end_turn()
-
-    environment.perform_action(torch.tensor([7.2574e-01, 3.7334e-01, 5.4087e-04]), animate=True)
-    environment.end_turn()
+    for action in actions:
+        environment.perform_action(torch.tensor(action), animate=True)
+        environment.end_turn()

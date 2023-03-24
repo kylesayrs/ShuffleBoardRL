@@ -31,9 +31,9 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
             environment.perform_action(action)
             reward = environment.get_reward()
             if environment.current_turn == 0:
-                zero_rewards.append(environment.get_reward())
+                zero_rewards.append(environment.get_reward().cpu().numpy())
             else:
-                one_rewards.append(environment.get_reward())
+                one_rewards.append(environment.get_reward().cpu().numpy())
 
             environment.end_turn()
             next_state = environment.get_state()
@@ -71,10 +71,11 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
             #visualize_game(ddpg, config, num_turns=1)
             tmp_environment = ShuffleBoardEnvironment(config.env, config.device)
             tmp_action = policy.get_q_action(ddpg, tmp_environment.get_state(), "query")
-            print(tmp_action)
+            print(tmp_action.cpu())
             environment.perform_action(tmp_action)
             tmp_environment.end_turn()
-            print(policy.get_q_action(ddpg, tmp_environment.get_state(), "query"))
+            tmp_action_2 = policy.get_q_action(ddpg, tmp_environment.get_state(), "query")
+            print(tmp_action_2.cpu())
             if config.verbosity >= 1:
                 print(
                     f" | {episode_i} / {config.optim.num_episodes}"
@@ -92,8 +93,6 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
 
             if config.verbosity > 0:
                 print()
-
-            metrics["zero_rewards"].append(numpy.mean(zero_rewards))
 
             zero_rewards = []
             one_rewards = []
@@ -117,6 +116,7 @@ def visualize_game(ddpg: DDPG, config: Config, num_turns: int):
 
 if __name__ == "__main__":
     config = Config(device="cpu")
+    print(config)
 
     ddpg = DDPG(
         config.env.num_turns,
@@ -136,7 +136,9 @@ if __name__ == "__main__":
             config.optim.epsilon_max,
             config.optim.epsilon_min,
             config.optim.noise_factor,
-            config.env.max_agent_magnitude
+            config.env.board_width,
+            config.env.max_agent_magnitude,
+            device=config.device,
         ),
         config
     )

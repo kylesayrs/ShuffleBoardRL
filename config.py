@@ -7,10 +7,10 @@ class EnvironmentConfig(BaseModel):
     two_height: float = Field(default=2.0)
     three_height: float = Field(default=2.0)
     
-    num_turns: int = Field(default=1)
+    num_turns: int = Field(default=3)
     puck_radius: float = Field(default=1.0)
-    friction_coef: float = Field(default=0.9)
-    max_agent_magnitude: float = Field(default=5.0)
+    friction_coef: float = Field(default=0.8)
+    max_agent_magnitude: float = Field(default=10.0)
 
     simulation_h: float = Field(default=2.0)
     max_time_steps: int = Field(default=1000)
@@ -33,7 +33,7 @@ class Optimization(BaseModel):
     spin_up_time: float = Field(default=0.3)
     epsilon_min: float = Field(default=0.0)
     epsilon_max: float = Field(default=1.0)
-    noise_factor: float = Field(default=0.01)
+    noise_factor: float = Field(default=0.05)
 
 
 class Config(BaseModel):

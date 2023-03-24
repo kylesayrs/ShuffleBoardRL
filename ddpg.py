@@ -237,17 +237,9 @@ class DDPG:
         quality_outputs = self.quality_model_query(states, actions)
 
         # backwards
-        #print(rewards)
-        #print(target_qualities)
-        #print(quality_outputs)
         quality_loss = self.quality_criterion(target_qualities, quality_outputs)
         quality_loss.backward()
-        #print(quality_loss)
         self.quality_optimizer.step()
-
-        with torch.no_grad():
-            pass
-            #print(self.quality_criterion(target_qualities, self.quality_model_query(states, actions)).item())
 
         return quality_loss
     
@@ -256,27 +248,15 @@ class DDPG:
         # forward
         self.actor_optimizer.zero_grad()
         actor_actions = self.actor_model_query(states)
-        #print(actor_actions)
 
         # TODO: Check whether freezing unfreezing is necessary
         self._freeze_network(self.quality_model_query)
         actor_action_qualities = self.quality_model_query(states, actor_actions)
-        #print(actor_action_qualities)
 
         # backwards
-        #print(actor_actions)
         actor_loss = -1 * torch.mean(actor_action_qualities)
         actor_loss.backward()
         self.actor_optimizer.step()
-        #print(actor_actions)
         self._unfreeze_network(self.quality_model_query)
-
-        with torch.no_grad():
-            pass
-            #actor_actions = self.actor_model_query(states)
-            #actor_action_qualities = self.quality_model_query(states, actor_actions)
-            #print((-1 * torch.mean(actor_action_qualities)))
-
-            #exit(0)
 
         return actor_loss
