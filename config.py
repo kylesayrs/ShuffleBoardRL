@@ -8,7 +8,7 @@ class EnvironmentConfig(BaseModel):
     three_height: float = Field(default=2.0)
     
     num_turns: int = Field(default=1)
-    puck_radius: float = Field(default=0.5)
+    puck_radius: float = Field(default=1.0)
     friction_coef: float = Field(default=0.9)
     max_agent_magnitude: float = Field(default=5.0)
 
@@ -20,20 +20,20 @@ class EnvironmentConfig(BaseModel):
 class Optimization(BaseModel):
     gamma: float = Field(default=0.0)
     quality_lr: float = Field(default=1e-4)
-    actor_lr: float = Field(default=5e-4)
+    actor_lr: float = Field(default=1e-5)
     quality_momentum: float = Field(default=0.05)
     actor_momentum: float = Field(default=0.05)
 
-    num_episodes: int = Field(default=10_000)
+    num_episodes: int = Field(default=20_000)
     episodes_per_cycle: int = Field(default=16)
     batches_per_cycle: int = Field(default=40)
     batch_size: int = Field(default=16)
-    replay_buffer_size: int = Field(default=10_000)
+    replay_buffer_size: int = Field(default=1_000)
 
-    spin_up_time: float = Field(default=0.5)
+    spin_up_time: float = Field(default=0.3)
     epsilon_min: float = Field(default=0.0)
     epsilon_max: float = Field(default=1.0)
-    noise_factor: float = Field(default=0.05)
+    noise_factor: float = Field(default=0.01)
 
 
 class Config(BaseModel):

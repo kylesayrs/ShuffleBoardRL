@@ -58,6 +58,6 @@ class SpinningUpEGreedyPolicyWithNoise(Policy):
     def update(self, training_progress: float):
         if training_progress > self.spin_up_time:
             self.epsilon = (
-                ((1 - (training_progress - self.spin_up_time) / self.spin_up_time)) *
+                ((1 - (training_progress - self.spin_up_time) / (1 - self.spin_up_time))) *
                 (self.epsilon_max - self.epsilon_min) + self.epsilon_min
             )

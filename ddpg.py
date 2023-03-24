@@ -17,8 +17,9 @@ class QualityBaseModel(torch.nn.Module):
 
         self.linear_0 = torch.nn.Linear(self.state_length + self.action_length, 512)
         self.linear_1 = torch.nn.Linear(512, 256)
-        self.linear_2 = torch.nn.Linear(256, 256)
-        self.linear_3 = torch.nn.Linear(256, 1)
+        self.linear_2 = torch.nn.Linear(256, 128)
+        self.linear_3 = torch.nn.Linear(128, 64)
+        self.linear_4 = torch.nn.Linear(64, 1)
 
         self.relu = torch.nn.ReLU()
 
@@ -41,8 +42,8 @@ class QualityBaseModel(torch.nn.Module):
         x = self.linear_2(x)
         x = self.relu(x)
         x = self.linear_3(x)
-        #x = self.relu(x)
-        #x = self.linear_4(x)
+        x = self.relu(x)
+        x = self.linear_4(x)
 
         return x
     
@@ -62,9 +63,11 @@ class ActorBaseModel(torch.nn.Module):
         self.angle = [0.0, torch.pi]
         self.magnitude = [0.0, self.max_magnitude]
 
-        self.linear_0 = torch.nn.Linear(self.state_length, self.state_length)
-        self.linear_1 = torch.nn.Linear(self.state_length, self.state_length)
-        self.linear_2 = torch.nn.Linear(self.state_length, self.action_length)
+        self.linear_0 = torch.nn.Linear(self.state_length, 512)
+        self.linear_1 = torch.nn.Linear(512, 256)
+        self.linear_2 = torch.nn.Linear(256, 128)
+        self.linear_3 = torch.nn.Linear(128, 64)
+        self.linear_4 = torch.nn.Linear(64, self.action_length)
 
         self.relu = torch.nn.ReLU()
         self.sigmoid = torch.nn.Sigmoid()
@@ -81,9 +84,13 @@ class ActorBaseModel(torch.nn.Module):
         # network
         x = self.linear_0(x)
         x = self.relu(x)
-        #x = self.linear_1(x)
-        #x = self.relu(x)
+        x = self.linear_1(x)
+        x = self.relu(x)
         x = self.linear_2(x)
+        x = self.relu(x)
+        x = self.linear_3(x)
+        x = self.relu(x)
+        x = self.linear_4(x)
         x = self.sigmoid(x)
 
         self.scale = torch.tensor([

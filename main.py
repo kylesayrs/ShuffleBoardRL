@@ -27,14 +27,13 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
         while not environment.is_finished():
             # do action in environment
             state = environment.get_state()
-            import torch
             action = policy.get_action(ddpg, state, "query")
             environment.perform_action(action)
             reward = environment.get_reward()
             if environment.current_turn == 0:
-                zero_rewards.append(environment.get_reward(0))
+                zero_rewards.append(environment.get_reward())
             else:
-                one_rewards.append(environment.get_reward(1))
+                one_rewards.append(environment.get_reward())
 
             environment.end_turn()
             next_state = environment.get_state()
@@ -50,9 +49,6 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
             )
             replay_buffer.enqueue(replay)
 
-            policy.update(training_progress)
-            break
-
         # cycle: perform optimization
         if episode_i % config.optim.episodes_per_cycle == 0:
 
@@ -64,14 +60,21 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
                 cum_quality_loss += quality_loss.item()
                 cum_actor_loss += actor_loss.item()
 
+            # update ddpg targets and policy
             ddpg.update_target_networks(config.optim.quality_momentum, config.optim.actor_momentum)
+            policy.update(training_progress)
             quality_losses.append(cum_quality_loss / config.optim.batches_per_cycle)
             actor_losses.append(cum_actor_loss / config.optim.batches_per_cycle)
 
-        # logging:
+        # logging
         if episode_i % config.logging_rate == 0:
             #visualize_game(ddpg, config, num_turns=1)
-            print(policy.get_q_action(ddpg, ShuffleBoardEnvironment(config.env, config.device).get_state(), "query"))
+            tmp_environment = ShuffleBoardEnvironment(config.env, config.device)
+            tmp_action = policy.get_q_action(ddpg, tmp_environment.get_state(), "query")
+            print(tmp_action)
+            environment.perform_action(tmp_action)
+            tmp_environment.end_turn()
+            print(policy.get_q_action(ddpg, tmp_environment.get_state(), "query"))
             if config.verbosity >= 1:
                 print(
                     f" | {episode_i} / {config.optim.num_episodes}"
@@ -82,8 +85,8 @@ def train(ddpg: DDPG, policy: Policy, config: Config):
                 q_loss = quality_losses[-1] if len(quality_losses) > 0 else 0.0
                 a_loss = actor_losses[-1] if len(actor_losses) > 0 else 0.0
                 print(
-                    f" | q_loss: {q_loss:.6f}"
-                    f" | a_loss: {a_loss:.6f}"
+                    f" | q_loss: {q_loss:.3f}"
+                    f" | a_loss: {a_loss:.3f}"
                     f" | epsilon: {policy.epsilon:.2f}"
                 , end="")
 
@@ -106,7 +109,6 @@ def visualize_game(ddpg: DDPG, config: Config, num_turns: int):
         # do action in environment
         state = environment.get_state()
         action = ddpg.infer_action(state, "query")
-        print(action)
         environment.perform_action(action, animate=True)
         environment.end_turn()
         num_turns_played += 1
